@@ -1,4 +1,4 @@
-// index.js
+// bot.js
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
@@ -222,7 +222,7 @@ if (hours < 9 || hours >= 24) return;
     }
   }
   saveUsers(users);
-}, 1 * 60 * 1000);
+}, 25 * 60 * 1000);
 
 function extractImportantParams(params) {
   const importantFields = {
