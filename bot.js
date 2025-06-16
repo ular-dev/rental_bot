@@ -136,11 +136,6 @@ bot.on('callback_query', async (query) => {
 });
 
 setInterval(async () => {
-    const now = new Date();
-    const hours = now.getUTCHours() + 6; // Бишкек = UTC+6
-
-if (hours < 9 || hours >= 24) return;
-
   const users = readUsers();
   for (const chatId in users) {
     const user = users[chatId];
@@ -222,7 +217,7 @@ if (hours < 9 || hours >= 24) return;
     }
   }
   saveUsers(users);
-}, 25 * 60 * 1000);
+}, 10 * 60 * 1000);
 
 function extractImportantParams(params) {
   const importantFields = {
