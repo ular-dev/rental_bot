@@ -213,7 +213,12 @@ setInterval(async () => {
       });
 
     } catch (err) {
-      console.error("Ошибка получения данных от Lalafo:", err.message);
+        if (err.response?.data?.description?.includes("USER_IS_BLOCKED") || err.message.includes("USER_IS_BLOCKED")) {
+            console.log(`❌ Пользователь ${chatId} заблокировал бота. Удаляю...`);
+            delete users[chatId];
+          } else {
+            console.error("Ошибка отправки сообщения:", err.message);
+          }
     }
   }
   saveUsers(users);
