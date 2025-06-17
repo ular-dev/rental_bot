@@ -136,92 +136,100 @@ bot.on('callback_query', async (query) => {
 });
 
 setInterval(async () => {
-  const users = readUsers();
-  for (const chatId in users) {
-    const user = users[chatId];
-    if (user.isStopped) continue;
-    user.sentItems = user.sentItems || [];
-    const cityId = user.cityId;
-    const districtId = user.districtId;
-    if (!user.cityId || !user.districtId || !user.roomParam) continue;
-
-    try {
-      const response = await axios.get("https://lalafo.kg/api/search/v3/feed/search", {
-        headers: { "User-Agent": "Mozilla/5.0", device: "pc" },
-        params: {
-          expand: "url",
-          "per-page": 50,
-          category_id: 2044,
-          city_id: cityId,
-          "parameters[69][0]": user.roomParam,
-          ...(districtId ? { "parameters[357][0]": districtId } : {})
-        }
-      });
-
-      const items = response.data.items || [];
-      const newItem = items.find(i => !user.sentItems?.some(si => si.id === i.id));
-      if (!newItem) continue;
-
-      const item = newItem;
-      const title = item.title?.replace('Long term rental apartments', 'Сдается квартира') || 'Без названия';
-      const importantParams = extractImportantParams(item.params || []);
-      const floor = importantParams.floorNumber && importantParams.numberOfFloors
-        ? `${importantParams.floorNumber} из ${importantParams.numberOfFloors}`
-        : "Не указано";
-      const whoOwner = importantParams.owner?.toLowerCase() === "owner" ? "Собственник" : "Агентство";
-      const deposit = importantParams.deposit || "Не указан";
-      const price = item.price ? `${item.price} ${item.currency}` : "Цена договорная";
-      const counter = globalListingCounter++;
-      const mobile = item.mobile;
-
-      const caption = `
-<b>${title}</b>
-
-📍 <b>Район:</b> #${user.district}
-💵 <b>Цена:</b> ${price}
-
-🏢 <b>Этаж:</b> ${floor}
-🏠 <b>Комната:</b> ${user.roomFilter}
-🔑 <b>Квартира от:</b> ${whoOwner}
-💰 <b>Депозит:</b> ${deposit}
-
-🆔 <b>Объявление №${counter}</b>
-
-📞 <b>Хочешь номер владельца?</b>
-Напиши админу ${ADMIN_ID === user.id ? mobile : ADMIN_USERNAME}
-Укажи номер объявления: <b>№${counter}</b>
-`.trim();
-
-      const media = item.images?.slice(0, 10).map((img, index) => ({
-        type: "photo",
-        media: img.original_url || img.thumbnail_url,
-        caption: index === 0 ? caption : undefined,
-        parse_mode: index === 0 ? "HTML" : undefined,
-      }));
-
-      if (media.length > 0) {
-        await bot.sendMediaGroup(chatId, media);
-      } else {
-        await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
-      }
-
-      user.sentItems?.push({
-        id: item.id,
-        counter,
-        mobile
-      });
-
-    } catch (err) {
-        if (err.response?.data?.description?.includes("USER_IS_BLOCKED") || err.message.includes("USER_IS_BLOCKED")) {
-            console.log(`❌ Пользователь ${chatId} заблокировал бота. Удаляю...`);
-            delete users[chatId];
-          } else {
-            console.error("Ошибка отправки сообщения:", err.message);
+    const users = readUsers();
+    const chatIds = Object.keys(users);
+  
+    for (const chatId of chatIds) {
+      const user = users[chatId];
+      if (user.isStopped) continue;
+      user.sentItems = user.sentItems || [];
+  
+      const cityId = user.cityId;
+      const districtId = user.districtId;
+      const roomParam = user.roomParam;
+      if (!cityId || !districtId || !roomParam) continue;
+  
+      try {
+        const response = await axios.get("https://lalafo.kg/api/search/v3/feed/search", {
+          headers: { "User-Agent": "Mozilla/5.0", device: "pc" },
+          params: {
+            expand: "url",
+            "per-page": 50,
+            category_id: 2044,
+            city_id: cityId,
+            "parameters[69][0]": roomParam,
+            ...(districtId ? { "parameters[357][0]": districtId } : {})
           }
+        });
+  
+        const items = response.data.items || [];
+        const newItem = items.find(i => !user.sentItems?.some(si => si.id === i.id));
+        if (!newItem) continue;
+  
+        const item = newItem;
+        const title = item.title?.replace('Long term rental apartments', 'Сдается квартира') || 'Без названия';
+        const importantParams = extractImportantParams(item.params || []);
+        const floor = importantParams.floorNumber && importantParams.numberOfFloors
+          ? `${importantParams.floorNumber} из ${importantParams.numberOfFloors}`
+          : "Не указано";
+        const whoOwner = importantParams.owner?.toLowerCase() === "owner" ? "Собственник" : "Агентство";
+        const deposit = importantParams.deposit || "Не указан";
+        const price = item.price ? `${item.price} ${item.currency}` : "Цена договорная";
+        const counter = globalListingCounter++;
+        const mobile = item.mobile;
+  
+        const caption = `
+  <b>${title}</b>
+  
+  📍 <b>Район:</b> #${user.district}
+  💵 <b>Цена:</b> ${price}
+  
+  🏢 <b>Этаж:</b> ${floor}
+  🏠 <b>Комната:</b> ${user.roomFilter}
+  🔑 <b>Квартира от:</b> ${whoOwner}
+  💰 <b>Депозит:</b> ${deposit}
+  
+  🆔 <b>Объявление №${counter}</b>
+  
+  📞 <b>Хочешь номер владельца?</b>
+  Напиши админу ${ADMIN_ID === user.id ? mobile : ADMIN_USERNAME}
+  Укажи номер объявления: <b>№${counter}</b>
+  `.trim();
+  
+        const media = item.images?.slice(0, 10).map((img, index) => ({
+          type: "photo",
+          media: img.original_url || img.thumbnail_url,
+          caption: index === 0 ? caption : undefined,
+          parse_mode: index === 0 ? "HTML" : undefined,
+        }));
+  
+        if (media.length > 0) {
+          await bot.sendMediaGroup(chatId, media);
+        } else {
+          await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
+        }
+  
+        user.sentItems?.push({
+          id: item.id,
+          counter,
+          mobile
+        });
+  
+      } catch (err) {
+        if (err.response?.data?.description?.includes("USER_IS_BLOCKED") || err.message.includes("USER_IS_BLOCKED")) {
+          console.log(`❌ Пользователь ${chatId} заблокировал бота. Удаляю...`);
+          delete users[chatId];
+        } else {
+          console.error("Ошибка отправки сообщения:", err.message);
+        }
+      }
+  
+      // 💤 Пауза между пользователями — 500 мс
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
-  }
-  saveUsers(users);
-}, 10 * 60 * 1000);
+  
+    saveUsers(users);
+  }, 10 * 60 * 1000);
 
 function extractImportantParams(params) {
   const importantFields = {
