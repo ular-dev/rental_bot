@@ -150,8 +150,7 @@ setInterval(async () => {
         headers: { "User-Agent": "Mozilla/5.0", device: "pc" },
         params: {
           expand: "url",
-          sort_by: "newest",
-          "per-page": 10,
+          "per-page": 50,
           category_id: 2044,
           city_id: cityId,
           "parameters[69][0]": user.roomParam,
