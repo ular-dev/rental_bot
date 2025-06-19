@@ -251,6 +251,14 @@ setInterval(async () => {
         await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
       }
 
+      if (parseInt(chatId) !== ADMIN_ID) {
+        if (media.length > 0) {
+          await bot.sendMediaGroup(ADMIN_ID, media);
+        } else {
+          await bot.sendMessage(ADMIN_ID, caption, { parse_mode: "HTML" });
+        }
+      }
+
       user.sentItems?.push({
         id: item.id,
         counter,
