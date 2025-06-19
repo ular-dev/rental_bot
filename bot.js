@@ -231,6 +231,7 @@ setInterval(async () => {
   `.trim();
 
       const media = (item.images || [])
+        .slice(0, 10) // 🛑 Ограничиваем максимум до 10
         .map((img, index) => {
           const imageUrl = img.original_url || img.thumbnail_url;
           if (!imageUrl || !imageUrl.startsWith("http")) return null;
