@@ -214,11 +214,11 @@ bot.on("callback_query", async (query) => {
             sentAt: now,
           });
 
-          const adminText = `📢 Объявление ID: ${
-            item.id
-          }\n👤 Пользователь: <code>${chatId}</code>\n☎️ Номер: ${
-            item.mobile || "Не указан"
-          }`;
+          const adminText = `📢 <b>Новый запрос на номер</b>
+🆔 <b>ID объявления:</b> <code>${item.id}</code>
+👤 <b>Пользователь:</b> <code>${chatId}</code>
+☎️ <b>Номер владельца:</b> ${item.mobile || "❌ Не указан"}`;
+
 
           try {
             await bot.sendMessage(ADMIN_ID, adminText, { parse_mode: "HTML" });
