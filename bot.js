@@ -253,22 +253,15 @@ setInterval(async () => {
 
       if (parseInt(chatId) !== ADMIN_ID) {
         const adminCaption = `
-      🆔 <b>Объявление №${counter}</b>
+      <b>${title}</b>
+      
+      📍 <b>Район:</b> #${user.district}
+      💵 <b>Цена:</b> ${price}
       📞 <b>Номер владельца:</b> ${mobile}
       👤 <b>Для пользователя:</b> <code>${chatId}</code>
       `.trim();
       
-        const adminMedia = media.map((item, index) => ({
-          ...item,
-          caption: index === 0 ? adminCaption : undefined,
-          parse_mode: index === 0 ? "HTML" : undefined,
-        }));
-      
-        if (adminMedia.length > 0) {
-          await bot.sendMediaGroup(ADMIN_ID, adminMedia);
-        } else {
-          await bot.sendMessage(ADMIN_ID, adminCaption, { parse_mode: "HTML" });
-        }
+        await bot.sendMessage(ADMIN_ID, adminCaption, { parse_mode: "HTML" });
       }
       
 
