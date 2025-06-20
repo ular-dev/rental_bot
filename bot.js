@@ -4,8 +4,13 @@ const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const Bottleneck = require('bottleneck');
 
 const token = process.env.BOT_TOKEN;
+const limiter = new Bottleneck({
+    minTime: 40, // 1000 ms / 25 сообщений ≈ 40 ms между сообщениями
+    maxConcurrent: 5, // Параллельная отправка до 5 одновременно
+  });
 const bot = new TelegramBot(token, { polling: true });
 const USERS_FILE = path.join(__dirname, "users.json");
 
@@ -246,9 +251,9 @@ setInterval(async () => {
         .filter(Boolean);
 
       if (media.length > 0) {
-        await bot.sendMediaGroup(chatId, media);
+        await safeSendMessage(bot.sendMediaGroup.bind(bot), chatId, [media], users);
       } else {
-        await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
+        await safeSendMessage(bot.sendMessage.bind(bot), chatId, [caption, { parse_mode: "HTML" }], users);
       }
 
       if (parseInt(chatId) !== ADMIN_ID) {
@@ -261,7 +266,7 @@ setInterval(async () => {
       👤 <b>Для пользователя:</b> <code>${chatId}</code>
       `.trim();
       
-        await bot.sendMessage(ADMIN_ID, adminCaption, { parse_mode: "HTML" });
+      await safeSendMessage(bot.sendMessage.bind(bot), ADMIN_ID, [adminCaption, { parse_mode: "HTML" }], users);
       }
       
 
@@ -281,9 +286,6 @@ setInterval(async () => {
         console.error("Ошибка отправки сообщения:", err.message);
       }
     }
-
-    // 💤 Пауза между пользователями — 500 мс
-    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   saveUsers(users);
@@ -358,6 +360,26 @@ function readUsers() {
 function saveUsers(data) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
 }
+
+async function safeSendMessage(botFn, chatId, payload, users) {
+    try {
+      return await limiter.schedule(() => botFn(chatId, ...payload));
+    } catch (err) {
+      const desc = err.response?.body?.description || err.message;
+  
+      if (desc.includes("bot was blocked") || desc.includes("chat not found")) {
+        console.warn(`🚫 Удаляю ${chatId} — ${desc}`);
+        delete users[chatId];
+        saveUsers(users);
+      } else if (desc.includes("Too Many Requests")) {
+        const retryAfter = err.response?.body?.parameters?.retry_after || 60;
+        console.warn(`⏳ Слишком много запросов. Жду ${retryAfter} сек...`);
+        await new Promise((res) => setTimeout(res, retryAfter * 1000));
+      } else {
+        console.error(`Ошибка отправки (${chatId}):`, desc);
+      }
+    }
+  }
 
 // Команда для администратора: /номер 12
 bot.onText(/\/номер (\d+)/, (msg, match) => {
