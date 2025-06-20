@@ -10,7 +10,7 @@ const bot = new TelegramBot(token, { polling: true });
 const USERS_FILE = path.join(__dirname, "users.json");
 
 const ADMIN_USERNAME = "@rental_312";
-const ADMIN_ID = 545735035;
+const ADMIN_ID = 8185939364;
 let globalListingCounter = 1;
 
 const cities = [
