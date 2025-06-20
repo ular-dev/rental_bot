@@ -160,13 +160,14 @@ bot.on("callback_query", async (query) => {
       for (const item of newItems) {
         const counter = user.sentItems.length + 1;
         const caption = `🏠 <b>${item.title || "Объявление"}</b>
+
 💵 Цена: ${item.price || "-"}
 📍 Район: ${user.district.name}
 🛏 Комнаты: ${user.room.name}
 🆔 ID объявления: <code>${item.id}</code>
 
 📞 <b>Хотите получить номер владельца?</b>
-💰 Стоимость: 50 сом  
+💰 <b>Стоимость: 50 сом</b> 
 📩 Напишите <a href="https://t.me/rental_kg">@rental_kg</a>, 
 указав ID: <code>${item.id}</code>.`;
 
