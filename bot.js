@@ -156,9 +156,7 @@ bot.on("callback_query", async (query) => {
           "📭 Новых квартир пока нет. Попробуйте позже."
         );
       }
-      console.log(newItems, "newItems");
       for (const item of newItems) {
-        console.log(item.params);
         const counter = user.sentItems.length + 1;
         const caption = `🏠 <b>${item.title || "Объявление"}</b>
 
@@ -187,12 +185,12 @@ bot.on("callback_query", async (query) => {
         try {
           if (media.length) {
             await bot.sendMediaGroup(chatId, media);
-            if (item.latitude && item.longitude) {
+            if (item.lat && item.lng) {
               await bot.sendLocation(chatId, item.lat, item.lng);
             }
           } else {
             await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
-            if (item.latitude && item.longitude) {
+            if (item.lat && item.lng) {
               await bot.sendLocation(chatId, item.lat, item.lng);
             }
           }
@@ -243,21 +241,21 @@ bot.on("callback_query", async (query) => {
         bot.sendMessage(chatId, "Хотите увидеть ещё?", {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "Показать ещё 3 квартир", callback_data: "show_5" }],
+              [{ text: "Показать ещё 3 квартиры", callback_data: "show_5" }],
             ],
           },
         });
+      } else {
+        bot.sendMessage(
+          chatId,
+          `⏳ Вы посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час.\nПопробуйте снова через час — будут новые квартиры!`
+        );
       }
     } catch (e) {
       console.error("Ошибка загрузки квартир:", e.message);
       bot.sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
     }
     return;
-  } else {
-    bot.sendMessage(
-      chatId,
-      `⏳ Вы посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час.\nПопробуйте снова через час — будут новые квартиры!`
-    );
   }
 
   if (query.data.startsWith("city_")) {
