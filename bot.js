@@ -16,46 +16,46 @@ const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, "{}", "utf8");
 
 const cities = [
-    { name: "Бишкек", id: 103184 },
-    { name: "Ош", id: 103218 },
-  ];
-  
-  const districts = {
-    Бишкек: [
-      { name: "Все районы", id: null },
-      { name: "Асанбай", id: 23249 },
-      { name: "Ата-Тюрк парк", id: 30250 },
-      { name: "Бишкек Парк ТРЦ", id: 30256 },
-      { name: "Джал мкр", id: 23217 },
-      { name: "Юг-2", id: 27210 },
-      { name: "Восток-5", id: 23200 },
-      { name: "Тунгуч", id: 23206 },
-      { name: "Моссовет", id: 27222 },
-      { name: "Аламедин-1", id: 23245 },
-      { name: "Аламединский рынок", id: 23211 },
-      { name: "12 мкр", id: 30231 },
-      { name: "7 мкр", id: 30236 },
-      { name: "Орто-Сай", id: 23202 },
-      { name: "Кызыл-Аскер", id: 23235 },
-      { name: "Учкун", id: 23225 },
-      { name: "Политех", id: 5014 },
-      { name: "ЦУМ", id: 5015 },
-    ],
-    Ош: [
-      { name: "Все районы", id: null },
-      { name: "Амир-Темур", id: 6001 },
-      { name: "Курманжан-Датка", id: 6002 },
-      { name: "Черёмушки", id: 6003 },
-      { name: "ВОЕНГОРОДОК", id: 6004 },
-    ],
-  };
-  
-  const roomOptions = [
-    { name: "1 комната", id: 2773 },
-    { name: "2 комнаты", id: 2774 },
-    { name: "3 комнаты", id: 2775 },
-    { name: "4 комнаты", id: 2776 },
-  ];
+  { name: "Бишкек", id: 103184 },
+  { name: "Ош", id: 103218 },
+];
+
+const districts = {
+  Бишкек: [
+    { name: "Все районы", id: null },
+    { name: "Асанбай", id: 23249 },
+    { name: "Ата-Тюрк парк", id: 30250 },
+    { name: "Бишкек Парк ТРЦ", id: 30256 },
+    { name: "Джал мкр", id: 23217 },
+    { name: "Юг-2", id: 27210 },
+    { name: "Восток-5", id: 23200 },
+    { name: "Тунгуч", id: 23206 },
+    { name: "Моссовет", id: 27222 },
+    { name: "Аламедин-1", id: 23245 },
+    { name: "Аламединский рынок", id: 23211 },
+    { name: "12 мкр", id: 30231 },
+    { name: "7 мкр", id: 30236 },
+    { name: "Орто-Сай", id: 23202 },
+    { name: "Кызыл-Аскер", id: 23235 },
+    { name: "Учкун", id: 23225 },
+    { name: "Политех", id: 5014 },
+    { name: "ЦУМ", id: 5015 },
+  ],
+  Ош: [
+    { name: "Все районы", id: null },
+    { name: "Амир-Темур", id: 6001 },
+    { name: "Курманжан-Датка", id: 6002 },
+    { name: "Черёмушки", id: 6003 },
+    { name: "ВОЕНГОРОДОК", id: 6004 },
+  ],
+};
+
+const roomOptions = [
+  { name: "1 комната", id: 2773 },
+  { name: "2 комнаты", id: 2774 },
+  { name: "3 комнаты", id: 2775 },
+  { name: "4 комнаты", id: 2776 },
+];
 
 bot.setMyCommands([{ command: "/start", description: "Запустить бота" }]);
 
@@ -124,7 +124,7 @@ bot.on("callback_query", async (query) => {
     if (sentThisHour.length >= MAX_ITEMS_PER_HOUR) {
       return bot.sendMessage(
         chatId,
-        "⏳ Вы уже посмотрели 20 квартир за последний час. Попробуйте позже."
+        `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час. Попробуйте позже.`
       );
     }
 
@@ -148,7 +148,7 @@ bot.on("callback_query", async (query) => {
 
       const newItems = availableItems
         .filter((item) => !user.sentItems.some((si) => si.id === item.id))
-        .slice(0, 5);
+        .slice(0, 3);
 
       if (!newItems.length) {
         return bot.sendMessage(
@@ -156,12 +156,13 @@ bot.on("callback_query", async (query) => {
           "📭 Новых квартир пока нет. Попробуйте позже."
         );
       }
-
+      console.log(newItems, "newItems");
       for (const item of newItems) {
+        console.log(item.params);
         const counter = user.sentItems.length + 1;
         const caption = `🏠 <b>${item.title || "Объявление"}</b>
 
-💵 Цена: ${item.price || "-"}
+💵 Цена: ${item.price || "-"} ${item.symbol || ""}
 📍 Район: ${user.district.name}
 🛏 Комнаты: ${user.room.name}
 🆔 ID объявления: <code>${item.id}</code>
@@ -186,8 +187,14 @@ bot.on("callback_query", async (query) => {
         try {
           if (media.length) {
             await bot.sendMediaGroup(chatId, media);
+            if (item.latitude && item.longitude) {
+              await bot.sendLocation(chatId, item.lat, item.lng);
+            }
           } else {
             await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
+            if (item.latitude && item.longitude) {
+              await bot.sendLocation(chatId, item.lat, item.lng);
+            }
           }
           await new Promise((r) => setTimeout(r, 2000));
         } catch (err) {
@@ -220,7 +227,6 @@ bot.on("callback_query", async (query) => {
 👤 <b>Пользователь:</b> <code>${chatId}</code>
 ☎️ <b>Номер владельца:</b> ${item.mobile || "❌ Не указан"}`;
 
-
           try {
             await bot.sendMessage(ADMIN_ID, adminText, { parse_mode: "HTML" });
           } catch (err) {
@@ -237,7 +243,7 @@ bot.on("callback_query", async (query) => {
         bot.sendMessage(chatId, "Хотите увидеть ещё?", {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "Показать ещё 5 квартир", callback_data: "show_5" }],
+              [{ text: "Показать ещё 3 квартир", callback_data: "show_5" }],
             ],
           },
         });
@@ -247,6 +253,11 @@ bot.on("callback_query", async (query) => {
       bot.sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
     }
     return;
+  } else {
+    bot.sendMessage(
+      chatId,
+      `⏳ Вы посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час.\nПопробуйте снова через час — будут новые квартиры!`
+    );
   }
 
   if (query.data.startsWith("city_")) {
@@ -276,7 +287,7 @@ bot.on("callback_query", async (query) => {
     bot.sendMessage(chatId, "✅ Фильтр сохранён.", {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "Показать 5 квартир", callback_data: "show_5" }],
+          [{ text: "Показать 3 квартир", callback_data: "show_5" }],
         ],
       },
     });
