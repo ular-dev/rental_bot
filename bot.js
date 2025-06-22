@@ -165,10 +165,10 @@ bot.on("callback_query", async (query) => {
 🛏 Комнаты: ${user.room.name}
 🆔 ID объявления: <code>${item.id}</code>
 
-📞 <b>Хотите получить номер владельца?</b>
-💰 <b>Стоимость: 50 сом</b> 
-📩 Напишите <a href="https://t.me/rental_kg">@rental_kg</a>, 
-указав ID: <code>${item.id}</code>.`;
+📎 <b>Хотите получить ссылку на объявление?</b>
+💰 <b>Стоимость: 50 сом</b>
+📩 Напишите <a href="https://t.me/rental_kg">@rental_kg</a>, указав ID: <code>${item.id}</code>.`;
+
 
         const media = (item.images || [])
           .filter(
@@ -220,10 +220,10 @@ bot.on("callback_query", async (query) => {
             sentAt: now,
           });
 
-          const adminText = `📢 <b>Новый запрос на номер</b>
+          const adminText = `📢 <b>Новый запрос на ссылку</b>
 🆔 <b>ID объявления:</b> <code>${item.id}</code>
-👤 <b>Пользователь:</b> <code>${chatId}</code>
-☎️ <b>Номер владельца:</b> ${item.mobile || "❌ Не указан"}`;
+🔗 <b>Ссылка:</b> <a href="https://lalafo.kg/${item.url}">Перейти к объявлению</a>`
+
 
           try {
             await bot.sendMessage(ADMIN_ID, adminText, { parse_mode: "HTML" });
