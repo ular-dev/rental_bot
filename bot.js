@@ -222,7 +222,7 @@ bot.on("callback_query", async (query) => {
 
           const adminText = `📢 <b>Новый запрос на ссылку</b>
 🆔 <b>ID объявления:</b> <code>${item.id}</code>
-🔗 <b>Ссылка:</b> <a href="https://lalafo.kg/${item.url}">Перейти к объявлению</a>`
+🔗 <b>Ссылка:</b> <a href="https://lalafo.kg${item.url}">Перейти к объявлению</a>`
 
 
           try {
