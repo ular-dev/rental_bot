@@ -10,7 +10,7 @@ const bot = new TelegramBot(token, { polling: true });
 const USERS_FILE = path.join(__dirname, "users.json");
 
 const ADMIN_ID = 8185930364;
-const MAX_ITEMS_PER_HOUR = 15;
+const MAX_ITEMS_PER_HOUR = 10;
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, "{}", "utf8");
@@ -121,7 +121,26 @@ bot.on("callback_query", async (query) => {
       (item) => now - item.sentAt < 60 * 60 * 1000
     );
 
+    if (user.limitReachedAt && now - user.limitReachedAt >= 60 * 60 * 1000) {
+      delete user.limitReachedAt;
+      saveUsers(users);
+      await bot.sendMessage(
+        chatId,
+        "✅ Прошел час — вы снова можете смотреть квартиры. Нажмите кнопку ниже 👇",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
+            ],
+          },
+        }
+      );
+      return;
+    }
+
     if (sentThisHour.length >= MAX_ITEMS_PER_HOUR) {
+      user.limitReachedAt = now;
+      saveUsers(users);
       return bot.sendMessage(
         chatId,
         `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час. Попробуйте позже.`
@@ -140,6 +159,7 @@ bot.on("callback_query", async (query) => {
             city_id: user.city.id,
             "parameters[69][0]": user.room.id,
             "parameters[357][0]": user.district.id,
+            "parameters[2149][0]": 19057,
           },
         }
       );
@@ -148,7 +168,7 @@ bot.on("callback_query", async (query) => {
 
       const newItems = availableItems
         .filter((item) => !user.sentItems.some((si) => si.id === item.id))
-        .slice(0, 3);
+        .slice(0, 2);
 
       if (!newItems.length) {
         return bot.sendMessage(
@@ -165,9 +185,9 @@ bot.on("callback_query", async (query) => {
 🛏 Комнаты: ${user.room.name}
 🆔 ID объявления: <code>${item.id}</code>
 
-📎 <b>Хотите получить ссылку на объявление?</b>
+📎 <b>Хотите получить номер владельца?</b>
 💰 <b>Стоимость: 50 сом</b>
-📩 Напишите <a href="https://t.me/rental_kg">@rental_kg</a>, указав ID: <code>${item.id}</code>.`;
+📩 Напишите <a href="https://t.me/rental_kg">@rental_kg</a> и укажите ID: <code>${item.id}</code>`;
 
 
         const media = (item.images || [])
@@ -220,10 +240,9 @@ bot.on("callback_query", async (query) => {
             sentAt: now,
           });
 
-          const adminText = `📢 <b>Новый запрос на ссылку</b>
+          const adminText = `📢 <b>Новый запрос на номер</b>
 🆔 <b>ID объявления:</b> <code>${item.id}</code>
-🔗 <b>Ссылка:</b> <a href="https://lalafo.kg${item.url}">Перейти к объявлению</a>`
-
+📞 <b>Номер:</b> ${item.mobile || "не найден"}`
 
           try {
             await bot.sendMessage(ADMIN_ID, adminText, { parse_mode: "HTML" });
@@ -241,7 +260,7 @@ bot.on("callback_query", async (query) => {
         bot.sendMessage(chatId, "Хотите увидеть ещё?", {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "Показать ещё 3 квартиры", callback_data: "show_5" }],
+              [{ text: "Показать ещё 2 квартиры", callback_data: "show_5" }],
             ],
           },
         });
@@ -285,7 +304,7 @@ bot.on("callback_query", async (query) => {
     bot.sendMessage(chatId, "✅ Фильтр сохранён.", {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "Показать 3 квартир", callback_data: "show_5" }],
+          [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
         ],
       },
     });
