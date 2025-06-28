@@ -121,23 +121,6 @@ bot.on("callback_query", async (query) => {
       (item) => now - item.sentAt < 60 * 60 * 1000
     );
 
-    if (user.limitReachedAt && now - user.limitReachedAt >= 60 * 60 * 1000) {
-      delete user.limitReachedAt;
-      saveUsers(users);
-      await bot.sendMessage(
-        chatId,
-        "✅ Прошел час — вы снова можете смотреть квартиры. Нажмите кнопку ниже 👇",
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
-            ],
-          },
-        }
-      );
-      return;
-    }
-
     if (sentThisHour.length >= MAX_ITEMS_PER_HOUR) {
       user.limitReachedAt = now;
       saveUsers(users);
@@ -167,8 +150,11 @@ bot.on("callback_query", async (query) => {
       const availableItems = response.data.items || [];
 
       const newItems = availableItems
-        .filter((item) => !user.sentItems.some((si) => si.id === item.id))
-        .slice(0, 2);
+  .filter(
+    (item) =>
+      !user.sentItems.some((si) => si.id === item.id) && item.mobile
+  )
+  .slice(0, 2);
 
       if (!newItems.length) {
         return bot.sendMessage(
@@ -358,3 +344,33 @@ function readUsers() {
 function saveUsers(data) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
 }
+
+
+// Проверка каждые 10 минут
+setInterval(() => {
+    const users = readUsers();
+    const now = Date.now();
+  
+    Object.entries(users).forEach(async ([chatId, user]) => {
+      if (user.limitReachedAt && now - user.limitReachedAt >= 60 * 60 * 1000) {
+        delete user.limitReachedAt;
+        saveUsers(users);
+        try {
+          await bot.sendMessage(
+            chatId,
+            "✅ Прошел час — вы снова можете смотреть квартиры. Нажмите кнопку ниже 👇",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
+                ],
+              },
+            }
+          );
+        } catch (err) {
+          console.error(`Ошибка отправки напоминания ${chatId}:`, err.message);
+        }
+      }
+    });
+  }, 10 * 60 * 1000); // каждые 10 минут
+  
