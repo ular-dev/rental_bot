@@ -10,7 +10,7 @@ const bot = new TelegramBot(token, { polling: true });
 const USERS_FILE = path.join(__dirname, "users.json");
 
 const ADMIN_ID = 8185930364;
-const MAX_ITEMS_PER_HOUR = 10;
+const MAX_ITEMS_PER_HOUR = 2;
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, "{}", "utf8");
@@ -251,6 +251,8 @@ bot.on("callback_query", async (query) => {
           },
         });
       } else {
+        user.limitReachedAt = now;
+        saveUsers(users)
         bot.sendMessage(
           chatId,
           `⏳ Вы посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час.\nПопробуйте снова через час — будут новые квартиры!`
