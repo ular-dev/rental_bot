@@ -228,14 +228,18 @@ bot.on("callback_query", async (query) => {
             caption: idx === 0 ? caption : undefined,
             parse_mode: idx === 0 ? "HTML" : undefined,
           }));
-
+          const message = `🔒 <b>Номер скрыт</b>
+          Чтобы получить доступ к номерам владельцев — оформите подписку.
+          
+          ✍️ Напишите: @rental_kg
+          📩 Обязательно укажите ваш ID: <code>${chatId}</code>`;
         try {
           if (media.length) {
             await bot.sendMediaGroup(chatId, media);
             if (!hasSubscription) {
               await bot.sendMessage(
                 chatId,
-                `🔒 <b>Номер скрыт</b>\nЧтобы получить доступ к номерам владельцев — оформите подписку.\n\n✍️ Напишите: @rental_kg`,
+                message,
                 {
                   parse_mode: "HTML",
                   reply_markup: {
