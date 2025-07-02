@@ -9,7 +9,7 @@ const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 const USERS_FILE = path.join(__dirname, "users.json");
 
-const ADMIN_ID = 545735035;
+const ADMIN_ID = 8185930364;
 const MAX_ITEMS_PER_HOUR = 12;
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
