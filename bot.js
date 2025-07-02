@@ -198,7 +198,9 @@ bot.on("callback_query", async (query) => {
 
 💵 Цена: ${item.price || "-"} ${item.symbol || ""}
 📍 Район: ${user.district.name}
-🛏 Комнаты: ${user.room.name}`
+🛏 Комнаты: ${user.room.name}
+   Номер: ${item.mobile}
+`;
 
         const buttons = hasSubscription
           ? undefined
