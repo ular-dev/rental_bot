@@ -9,7 +9,7 @@ const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 const USERS_FILE = path.join(__dirname, "users.json");
 
-const ADMIN_ID = 8185930364;
+const ADMIN_ID = 545735035;
 const MAX_ITEMS_PER_HOUR = 12;
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
@@ -57,7 +57,10 @@ const roomOptions = [
   { name: "4 комнаты", id: 2776 },
 ];
 
-bot.setMyCommands([{ command: "/start", description: "Запустить бота" }]);
+bot.setMyCommands([
+  { command: "/start", description: "🔄 Запустить бота" },
+  { command: "/subinfo", description: "🔐 Моя подписка и ID" },
+]);
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
@@ -85,7 +88,7 @@ bot.onText(/\/start/, (msg) => {
   if (sentThisHour.length >= MAX_ITEMS_PER_HOUR) {
     return bot.sendMessage(
       chatId,
-      "⏳ Вы уже посмотрели 20 квартир за последний час. Попробуйте позже."
+    `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час. Попробуйте позже.`
     );
   }
 
@@ -103,6 +106,16 @@ bot.on("callback_query", async (query) => {
     sentItems: [],
   };
   const user = users[chatId];
+
+  if (query.data === "change_filter") {
+    user.city = null;
+    user.district = null;
+    user.room = null;
+    saveUsers(users);
+    bot.answerCallbackQuery(query.id);
+    return sendCitySelection(chatId);
+  }
+  
 
   if (query.data === "show_5") {
     if (!user.city || !user.room || !user.district) {
@@ -137,7 +150,7 @@ bot.on("callback_query", async (query) => {
           headers: { "User-Agent": "Mozilla/5.0", device: "pc" },
           params: {
             expand: "url",
-            "per-page": 50,
+            "per-page": 100,
             category_id: 2044,
             city_id: user.city.id,
             "parameters[69][0]": user.room.id,
@@ -164,16 +177,18 @@ bot.on("callback_query", async (query) => {
       }
       for (const item of newItems) {
         const counter = user.sentItems.length + 1;
+        const hasSubscription = user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
         const caption = `🏠 <b>${item.title || "Объявление"}</b>
 
 💵 Цена: ${item.price || "-"} ${item.symbol || ""}
 📍 Район: ${user.district.name}
 🛏 Комнаты: ${user.room.name}
-🆔 ID объявления: <code>${item.id}</code>
 
-📎 <b>Хотите получить номер владельца?</b>
-💰 <b>Стоимость: 50 сом</b>
-📩 Напишите <a href="https://t.me/rental_kg">@rental_kg</a> и укажите ID: <code>${item.id}</code>`;
+${
+  hasSubscription
+    ? `📞 <b>Номер владельца:</b> ${item.mobile}`
+    : `🔒 Подписка не активна. Чтобы получить номера — напишите @admin_312`
+}`;
 
 
         const media = (item.images || [])
@@ -191,14 +206,8 @@ bot.on("callback_query", async (query) => {
         try {
           if (media.length) {
             await bot.sendMediaGroup(chatId, media);
-            if (item.lat && item.lng) {
-              await bot.sendLocation(chatId, item.lat, item.lng);
-            }
           } else {
             await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
-            if (item.lat && item.lng) {
-              await bot.sendLocation(chatId, item.lat, item.lng);
-            }
           }
           await new Promise((r) => setTimeout(r, 2000));
         } catch (err) {
@@ -225,16 +234,6 @@ bot.on("callback_query", async (query) => {
             mobile: item.mobile,
             sentAt: now,
           });
-
-          const adminText = `📢 <b>Новый запрос на номер</b>
-🆔 <b>ID объявления:</b> <code>${item.id}</code>
-📞 <b>Номер:</b> ${item.mobile || "не найден"}`
-
-          try {
-            await bot.sendMessage(ADMIN_ID, adminText, { parse_mode: "HTML" });
-          } catch (err) {
-            console.error("Ошибка отправки админу:", err.message);
-          }
         }
       }
 
@@ -247,6 +246,7 @@ bot.on("callback_query", async (query) => {
           reply_markup: {
             inline_keyboard: [
               [{ text: "Показать ещё 2 квартиры", callback_data: "show_5" }],
+              [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
             ],
           },
         });
@@ -255,7 +255,9 @@ bot.on("callback_query", async (query) => {
         saveUsers(users)
         bot.sendMessage(
           chatId,
-          `⏳ Вы посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час.\nПопробуйте снова через час — будут новые квартиры!`
+          `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир 🏠 за этот час.
+
+          🔔 Новые варианты появятся через час — обязательно загляните!`
         );
       }
     } catch (e) {
@@ -293,6 +295,7 @@ bot.on("callback_query", async (query) => {
       reply_markup: {
         inline_keyboard: [
           [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
+          [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
         ],
       },
     });
@@ -347,6 +350,56 @@ function saveUsers(data) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
 }
 
+bot.onText(/\/sub (\d+) (\d+)/, (msg, match) => {
+  if (msg.from.id !== ADMIN_ID) return;
+
+  const userId = match[1];
+  const days = parseInt(match[2], 10);
+  const users = readUsers();
+
+  if (!users[userId]) {
+    return bot.sendMessage(msg.chat.id, "❗ Пользователь не найден.");
+  }
+
+  const now = Date.now();
+  const currentExpiry = users[userId].hasSubscriptionUntil || 0;
+  const baseTime = currentExpiry > now ? currentExpiry : now;
+
+  users[userId].hasSubscriptionUntil = baseTime + days * 24 * 60 * 60 * 1000;
+  saveUsers(users);
+
+  const untilDate = new Date(users[userId].hasSubscriptionUntil).toLocaleString("ru-RU", { timeZone: "Asia/Bishkek" });
+  bot.sendMessage(
+    msg.chat.id,
+    `✅ Подписка активна до ${untilDate} для пользователя ${userId}`
+  );
+});
+
+bot.onText(/\/subinfo/, (msg) => {
+  const users = readUsers();
+  const user = users[msg.chat.id];
+
+  if (!user) {
+    return bot.sendMessage(msg.chat.id, "Вы ещё не использовали бота.");
+  }
+
+  const now = Date.now();
+  const hasSub = user.hasSubscriptionUntil && user.hasSubscriptionUntil > now;
+  const untilDate = hasSub
+    ? new Date(user.hasSubscriptionUntil).toLocaleString("ru-RU", { timeZone: "Asia/Bishkek" })
+    : "-";
+
+  bot.sendMessage(
+    msg.chat.id,
+    `📱 <b>Статус подписки:</b> ${hasSub ? "активна ✅" : "неактивна ❌"}\n` +
+    `⏰ <b>Действует до:</b> ${untilDate}\n` +
+    `🆔 <b>Ваш ID:</b> <code>${msg.chat.id}</code>`,
+    { parse_mode: "HTML" }
+  );
+});
+
+
+
 
 // Проверка каждые 10 минут
 setInterval(() => {
@@ -354,6 +407,20 @@ setInterval(() => {
     const now = Date.now();
   
     Object.entries(users).forEach(async ([chatId, user]) => {
+      // Удаляем истекшую подписку и уведомляем
+    if (user.hasSubscriptionUntil && user.hasSubscriptionUntil < now) {
+      delete user.hasSubscriptionUntil;
+      saveUsers(users);
+      try {
+        await bot.sendMessage(
+          chatId,
+          "⏳ Ваша подписка закончилась. Чтобы снова получать объявления с номерами — оформите подписку."
+        );
+      } catch (err) {
+        console.error(`Ошибка при уведомлении о подписке ${chatId}:`, err.message);
+      }
+    }
+
       if (user.limitReachedAt && now - user.limitReachedAt >= 60 * 60 * 1000) {
         delete user.limitReachedAt;
         saveUsers(users);
