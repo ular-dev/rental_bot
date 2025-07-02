@@ -88,7 +88,7 @@ bot.onText(/\/start/, (msg) => {
   if (sentThisHour.length >= MAX_ITEMS_PER_HOUR) {
     return bot.sendMessage(
       chatId,
-    `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час. Попробуйте позже.`
+      `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир за последний час. Попробуйте позже.`
     );
   }
 
@@ -115,7 +115,21 @@ bot.on("callback_query", async (query) => {
     bot.answerCallbackQuery(query.id);
     return sendCitySelection(chatId);
   }
+
+  if (query.data === "buy_subscription") {
+    bot.answerCallbackQuery(query.id);
+    bot.sendMessage(
+      chatId,
+      `📅 <b>Тарифы подписки:</b>
+  • 1 день — 200 сом
+  • 3 дня — 500 сом
   
+  💰 <b>Оплата:</b> 0504 399 696 (Единица)
+  
+  📩 После оплаты — напишите @rental_kg для активации подписки.`,
+      { parse_mode: "HTML" }
+    );
+  }
 
   if (query.data === "show_5") {
     if (!user.city || !user.room || !user.district) {
@@ -163,11 +177,11 @@ bot.on("callback_query", async (query) => {
       const availableItems = response.data.items || [];
 
       const newItems = availableItems
-  .filter(
-    (item) =>
-      !user.sentItems.some((si) => si.id === item.id) && item.mobile
-  )
-  .slice(0, 2);
+        .filter(
+          (item) =>
+            !user.sentItems.some((si) => si.id === item.id) && item.mobile
+        )
+        .slice(0, 2);
 
       if (!newItems.length) {
         return bot.sendMessage(
@@ -177,8 +191,10 @@ bot.on("callback_query", async (query) => {
       }
       for (const item of newItems) {
         const counter = user.sentItems.length + 1;
-        const hasSubscription = user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
-        const caption = `🏠 <b>${item.title || "Объявление"}</b>
+        const hasSubscription =
+          user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
+        const caption = `
+🏠 <b>${item.title || "Объявление"}</b>
 
 💵 Цена: ${item.price || "-"} ${item.symbol || ""}
 📍 Район: ${user.district.name}
@@ -187,9 +203,24 @@ bot.on("callback_query", async (query) => {
 ${
   hasSubscription
     ? `📞 <b>Номер владельца:</b> ${item.mobile}`
-    : `🔒 Подписка не активна. Чтобы получить номера — напишите @rental_kg`
-}`;
+    : `🔒 <b>Номер скрыт</b>\nЧтобы получить доступ к номерам владельцев — оформите подписку.\n\n✍️ Напишите: @rental_kg`
+}
+`;
 
+        const buttons = hasSubscription
+          ? undefined
+          : {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "💳 Оформить подписку",
+                      callback_data: "buy_subscription",
+                    },
+                  ],
+                ],
+              },
+            };
 
         const media = (item.images || [])
           .filter(
@@ -206,8 +237,30 @@ ${
         try {
           if (media.length) {
             await bot.sendMediaGroup(chatId, media);
+            if (!hasSubscription) {
+              await bot.sendMessage(
+                chatId,
+                `🔒 <b>Номер скрыт</b>\nЧтобы получить доступ — активируйте подписку.`,
+                {
+                  parse_mode: "HTML",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: "💳 Оформить подписку",
+                          callback_data: "buy_subscription",
+                        },
+                      ],
+                    ],
+                  },
+                }
+              );
+            }
           } else {
-            await bot.sendMessage(chatId, caption, { parse_mode: "HTML" });
+            await bot.sendMessage(chatId, caption, {
+              parse_mode: "HTML",
+              ...buttons,
+            });
           }
           await new Promise((r) => setTimeout(r, 2000));
         } catch (err) {
@@ -252,7 +305,7 @@ ${
         });
       } else {
         user.limitReachedAt = now;
-        saveUsers(users)
+        saveUsers(users);
         bot.sendMessage(
           chatId,
           `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир 🏠 за этот час.
@@ -366,22 +419,47 @@ bot.onText(/\/sub (\d+) (\d+)/, (msg, match) => {
   const baseTime = currentExpiry > now ? currentExpiry : now;
 
   users[userId].hasSubscriptionUntil = baseTime + days * 24 * 60 * 60 * 1000;
+  users[userId].sentItems = [];
+
+  delete users[userId].limitReachedAt;
+
   saveUsers(users);
 
-  const untilDate = new Date(users[userId].hasSubscriptionUntil).toLocaleString("ru-RU", { timeZone: "Asia/Bishkek" });
+  const untilDate = new Date(users[userId].hasSubscriptionUntil).toLocaleString(
+    "ru-RU",
+    { timeZone: "Asia/Bishkek" }
+  );
   bot.sendMessage(
     msg.chat.id,
     `✅ Подписка активна до ${untilDate} для пользователя ${userId}`
   );
-  
-  // Сообщение клиенту
-  bot.sendMessage(
-    userId,
+
+  const subText =
     `🎉 Ваша подписка активирована!\n` +
     `📅 Действует до: <b>${untilDate}</b>\n\n` +
-    `Теперь вы получаете доступ ко всем объявлениям с номерами владельцев.`,
-    { parse_mode: "HTML" }
-  );
+    `Теперь вы получаете доступ ко всем объявлениям с номерами владельцев.`;
+
+  bot.sendMessage(userId, subText, { parse_mode: "HTML" });
+
+  if (users[userId].city && users[userId].district && users[userId].room) {
+    bot.sendMessage(userId, "📢 Подписка активна. Показать новые квартиры?", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
+          [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
+        ],
+      },
+    });
+  } else {
+    bot
+      .sendMessage(
+        userId,
+        "📌 Подписка активирована. Для начала выберите фильтры: город, район и количество комнат."
+      )
+      .then(() => {
+        sendCitySelection(userId);
+      });
+  }
 });
 
 bot.onText(/\/subinfo/, (msg) => {
@@ -395,28 +473,27 @@ bot.onText(/\/subinfo/, (msg) => {
   const now = Date.now();
   const hasSub = user.hasSubscriptionUntil && user.hasSubscriptionUntil > now;
   const untilDate = hasSub
-    ? new Date(user.hasSubscriptionUntil).toLocaleString("ru-RU", { timeZone: "Asia/Bishkek" })
+    ? new Date(user.hasSubscriptionUntil).toLocaleString("ru-RU", {
+        timeZone: "Asia/Bishkek",
+      })
     : "-";
 
   bot.sendMessage(
     msg.chat.id,
     `📱 <b>Статус подписки:</b> ${hasSub ? "активна ✅" : "неактивна ❌"}\n` +
-    `⏰ <b>Действует до:</b> ${untilDate}\n` +
-    `🆔 <b>Ваш ID:</b> <code>${msg.chat.id}</code>`,
+      `⏰ <b>Действует до:</b> ${untilDate}\n` +
+      `🆔 <b>Ваш ID:</b> <code>${msg.chat.id}</code>`,
     { parse_mode: "HTML" }
   );
 });
 
-
-
-
 // Проверка каждые 10 минут
 setInterval(() => {
-    const users = readUsers();
-    const now = Date.now();
-  
-    Object.entries(users).forEach(async ([chatId, user]) => {
-      // Удаляем истекшую подписку и уведомляем
+  const users = readUsers();
+  const now = Date.now();
+
+  Object.entries(users).forEach(async ([chatId, user]) => {
+    // Удаляем истекшую подписку и уведомляем
     if (user.hasSubscriptionUntil && user.hasSubscriptionUntil < now) {
       delete user.hasSubscriptionUntil;
       saveUsers(users);
@@ -426,29 +503,31 @@ setInterval(() => {
           "⏳ Ваша подписка закончилась. Чтобы снова получать объявления с номерами — оформите подписку."
         );
       } catch (err) {
-        console.error(`Ошибка при уведомлении о подписке ${chatId}:`, err.message);
+        console.error(
+          `Ошибка при уведомлении о подписке ${chatId}:`,
+          err.message
+        );
       }
     }
 
-      if (user.limitReachedAt && now - user.limitReachedAt >= 60 * 60 * 1000) {
-        delete user.limitReachedAt;
-        saveUsers(users);
-        try {
-          await bot.sendMessage(
-            chatId,
-            "✅ Прошел час — вы снова можете смотреть квартиры. Нажмите кнопку ниже 👇",
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
-                ],
-              },
-            }
-          );
-        } catch (err) {
-          console.error(`Ошибка отправки напоминания ${chatId}:`, err.message);
-        }
+    if (user.limitReachedAt && now - user.limitReachedAt >= 60 * 60 * 1000) {
+      delete user.limitReachedAt;
+      saveUsers(users);
+      try {
+        await bot.sendMessage(
+          chatId,
+          "✅ Прошел час — вы снова можете смотреть квартиры. Нажмите кнопку ниже 👇",
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
+              ],
+            },
+          }
+        );
+      } catch (err) {
+        console.error(`Ошибка отправки напоминания ${chatId}:`, err.message);
       }
-    });
-  }, 10 * 60 * 1000); // каждые 10 минут
-  
+    }
+  });
+}, 10 * 60 * 1000); // каждые 10 минут
