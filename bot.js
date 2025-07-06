@@ -72,6 +72,7 @@ bot.onText(/\/start/, (msg) => {
     district: null,
     room: null,
     sentItems: [],
+    freeViewed: 0,
   };
 
   const user = users[chatId];
@@ -121,12 +122,14 @@ bot.on("callback_query", async (query) => {
     bot.sendMessage(
       chatId,
       `📅 <b>Тарифы подписки:</b>
-  • 1 день — 200 сом
-  • 3 дня — 500 сом
+  • 1 день — 200 сом  
+  • 3 дня — 400 сом
+  • 5 дня — 600 сом
   
   💰 <b>Оплата:</b> 0504 399 696 (Единица)
   
-  📩 После оплаты — напишите @rental_kg для активации подписки.`,
+  📩 После оплаты — напишите @rental_kg  
+  🔑 Укажите ваш Telegram ID: <code>${chatId}</code>`,
       { parse_mode: "HTML" }
     );
   }
@@ -193,30 +196,16 @@ bot.on("callback_query", async (query) => {
         const counter = user.sentItems.length + 1;
         const hasSubscription =
           user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
+        const isFreeAvailable = !hasSubscription && user.freeViewed < 12;
         const caption = `
 🏠 <b>${item.title || "Объявление"}</b>
 
-💵 Цена: ${item.price || "-"} ${item.symbol || ""}
-📍 Район: ${user.district.name}
-🛏 Комнаты: ${user.room.name}
-   Номер: ${hasSubscription ? item.mobile : "Оформите подписку"}
-`;
-
-        const buttons = hasSubscription
-          ? undefined
-          : {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: "💳 Оформить подписку",
-                      callback_data: "buy_subscription",
-                    },
-                  ],
-                ],
-              },
-            };
-
+💵 <b>Цена:</b> ${item.price || "—"} ${item.symbol || ""}
+📍 <b>Район:</b> ${user.district.name}
+🛏 <b>Комнат:</b> ${user.room.name}
+📞 <b>Номер:</b> ${hasSubscription || isFreeAvailable ? item.mobile : "🔒 Доступен по подписке"}
+        `;
+        
         const media = (item.images || [])
           .filter(
             (img) => img.original_url && img.original_url.startsWith("http")
@@ -228,37 +217,12 @@ bot.on("callback_query", async (query) => {
             caption: idx === 0 ? caption : undefined,
             parse_mode: idx === 0 ? "HTML" : undefined,
           }));
-          const message = `🔒 <b>Номер скрыт</b>
-          Чтобы получить доступ к номерам владельцев — оформите подписку.
-          
-          ✍️ Напишите: @rental_kg
-          📩 Обязательно укажите ваш ID: <code>${chatId}</code>`;
         try {
           if (media.length) {
-            await bot.sendMediaGroup(chatId, media);
-            if (!hasSubscription) {
-              await bot.sendMessage(
-                chatId,
-                message,
-                {
-                  parse_mode: "HTML",
-                  reply_markup: {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: "💳 Оформить подписку",
-                          callback_data: "buy_subscription",
-                        },
-                      ],
-                    ],
-                  },
-                }
-              );
-            }
+            await bot.sendMediaGroup(chatId, media)
           } else {
             await bot.sendMessage(chatId, caption, {
-              parse_mode: "HTML",
-              ...buttons,
+              parse_mode: "HTML"
             });
           }
           await new Promise((r) => setTimeout(r, 2000));
@@ -280,20 +244,26 @@ bot.on("callback_query", async (query) => {
 
         const alreadySent = user.sentItems.some((i) => i.id === item.id);
         if (!alreadySent) {
-          user.sentItems.push({
-            id: item.id,
-            counter,
-            mobile: item.mobile,
-            sentAt: now,
-          });
+          if (hasSubscription || user.freeViewed >= 12) {
+            user.sentItems.push({
+              id: item.id,
+              counter,
+              mobile: item.mobile,
+              sentAt: now,
+            });
+          }
+        }
+        if (!hasSubscription && isFreeAvailable) {
+          user.freeViewed += 1;
         }
       }
 
       saveUsers(users);
-      if (
-        user.sentItems.filter((item) => now - item.sentAt < 60 * 60 * 1000)
-          .length < MAX_ITEMS_PER_HOUR
-      ) {
+      const hasSubscription =
+        user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
+      const isFreeAvailable = !hasSubscription && user.freeViewed < 12;
+
+      if (hasSubscription || isFreeAvailable) {
         bot.sendMessage(chatId, "Хотите увидеть ещё?", {
           reply_markup: {
             inline_keyboard: [
@@ -303,13 +273,23 @@ bot.on("callback_query", async (query) => {
           },
         });
       } else {
-        user.limitReachedAt = now;
-        saveUsers(users);
         bot.sendMessage(
           chatId,
-          `⏳ Вы уже посмотрели ${MAX_ITEMS_PER_HOUR} квартир 🏠 за этот час.
+          `🎁 Вы использовали все бесплатные просмотры.
 
-          🔔 Новые варианты появятся через час — обязательно загляните!`
+Чтобы продолжить — оформите подписку:`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "💳 Оформить подписку",
+                    callback_data: "buy_subscription",
+                  },
+                ],
+              ],
+            },
+          }
         );
       }
     } catch (e) {
@@ -395,7 +375,11 @@ function sendRoomSelection(chatId) {
 }
 
 function readUsers() {
-  return JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
+  const data = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
+  for (const user of Object.values(data)) {
+    if (user.freeViewed === undefined) user.freeViewed = 0;
+  }
+  return data;
 }
 
 function saveUsers(data) {
