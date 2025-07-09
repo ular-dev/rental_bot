@@ -389,7 +389,7 @@ function saveUsers(data) {
 bot.onText(/\/sub (\d+) (\d+)/, (msg, match) => {
   if (msg.from.id !== ADMIN_ID) return;
 
-  const userId = match[1];
+  const userId = parseInt(match[1], 10);
   const days = parseInt(match[2], 10);
   const users = readUsers();
 
