@@ -1,6 +1,6 @@
-// rental_bot_v2.js
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
+const Bottleneck = require("bottleneck");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
@@ -11,7 +11,14 @@ const USERS_FILE = path.join(__dirname, "users.json");
 
 const ADMIN_ID = 8185930364;
 const MAX_ITEMS_PER_HOUR = 12;
+const MAX_FREE_ITEMS = 6;
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+
+const limiter = new Bottleneck({ maxConcurrent: 1, minTime: 40 });
+const safeSendMessage = limiter.wrap(bot.sendMessage.bind(bot));
+const safeSendPhoto = limiter.wrap(bot.sendPhoto.bind(bot));
+const safeSendMediaGroup = limiter.wrap(bot.sendMediaGroup.bind(bot));
+const safeAnswerCallback = limiter.wrap(bot.answerCallbackQuery.bind(bot));
 
 if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, "{}", "utf8");
 
@@ -24,6 +31,10 @@ const districts = {
   Бишкек: [
     { name: "Все районы", id: null },
     { name: "Асанбай", id: 23249 },
+    {
+      name: "Микрорайоны",
+      id: [30231, 30236, 30232, 30233, 30229, 30234, 30235, 30237, 30238],
+    },
     { name: "Ата-Тюрк парк", id: 30250 },
     { name: "Бишкек Парк ТРЦ", id: 30256 },
     { name: "Джал мкр", id: 23217 },
@@ -32,14 +43,15 @@ const districts = {
     { name: "Тунгуч", id: 23206 },
     { name: "Моссовет", id: 27222 },
     { name: "Аламедин-1", id: 23245 },
-    { name: "Аламединский рынок", id: 23211 },
-    { name: "12 мкр", id: 30231 },
-    { name: "7 мкр", id: 30236 },
+    { name: "Аламедин рынок", id: 23211 },
     { name: "Орто-Сай", id: 23202 },
     { name: "Кызыл-Аскер", id: 23235 },
     { name: "Учкун", id: 23225 },
     { name: "Политех", id: 5014 },
     { name: "ЦУМ", id: 5015 },
+    {name: "1000 мелочей", id: 30228},
+    {name: "Арча-Бешик", id: 23207},
+    {name: "Вефа", id: 56388},
   ],
   Ош: [
     { name: "Все районы", id: null },
@@ -51,6 +63,7 @@ const districts = {
 };
 
 const roomOptions = [
+  { name: "Студия", id: 15496},
   { name: "1 комната", id: 2773 },
   { name: "2 комнаты", id: 2774 },
   { name: "3 комнаты", id: 2775 },
@@ -161,21 +174,27 @@ bot.on("callback_query", async (query) => {
     }
 
     try {
-      const response = await axios.get(
-        "https://lalafo.kg/api/search/v3/feed/search",
-        {
-          headers: { "User-Agent": "Mozilla/5.0", device: "pc" },
-          params: {
-            expand: "url",
-            "per-page": 100,
-            category_id: 2044,
-            city_id: user.city.id,
-            "parameters[69][0]": user.room.id,
-            "parameters[357][0]": user.district.id,
-            "parameters[2149][0]": 19057,
-          },
-        }
-      );
+      const params = {
+        expand: "url",
+        "per-page": 100,
+        category_id: 2044,
+        city_id: user.city.id,
+        "parameters[69][0]": user.room.id, // Комнаты
+        "parameters[2149][0]": 19057, // Тип недвижимости
+      };
+      
+      if (Array.isArray(user.district.id)) {
+        user.district.id.forEach((id, i) => {
+          params[`parameters[357][${i}]`] = id;
+        });
+      } else {
+        params["parameters[357][0]"] = user.district.id;
+      }
+      
+      const response = await axios.get("https://lalafo.kg/api/search/v3/feed/search", {
+        headers: { "User-Agent": "Mozilla/5.0", device: "pc" },
+        params,
+      });
 
       const availableItems = response.data.items || [];
 
@@ -186,17 +205,25 @@ bot.on("callback_query", async (query) => {
         )
         .slice(0, 2);
 
-      if (!newItems.length) {
-        return bot.sendMessage(
-          chatId,
-          "📭 Новых квартир пока нет. Попробуйте позже."
-        );
-      }
+        if (!newItems.length) {
+          return bot.sendMessage(chatId, "📭 Новых квартир пока нет. Попробуйте позже.", {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "🔁 Изменить фильтр",
+                    callback_data: "change_filters",
+                  },
+                ],
+              ],
+            },
+          });
+        }
       for (const item of newItems) {
         const counter = user.sentItems.length + 1;
         const hasSubscription =
           user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
-        const isFreeAvailable = !hasSubscription && user.freeViewed < 12;
+        const isFreeAvailable = user.freeViewed < MAX_FREE_ITEMS;
         const caption = `
 🏠 <b>${item.title || "Объявление"}</b>
 
@@ -219,9 +246,9 @@ bot.on("callback_query", async (query) => {
           }));
         try {
           if (media.length) {
-            await bot.sendMediaGroup(chatId, media)
+            await safeSendMediaGroup(chatId, media)
           } else {
-            await bot.sendMessage(chatId, caption, {
+            await safeSendMessage(chatId, caption, {
               parse_mode: "HTML"
             });
           }
@@ -244,14 +271,12 @@ bot.on("callback_query", async (query) => {
 
         const alreadySent = user.sentItems.some((i) => i.id === item.id);
         if (!alreadySent) {
-          if (hasSubscription || user.freeViewed >= 12) {
-            user.sentItems.push({
-              id: item.id,
-              counter,
-              mobile: item.mobile,
-              sentAt: now,
-            });
-          }
+          user.sentItems.push({
+            id: item.id,
+            counter,
+            mobile: item.mobile,
+            sentAt: now,
+          });
         }
         if (!hasSubscription && isFreeAvailable) {
           user.freeViewed += 1;
@@ -261,23 +286,25 @@ bot.on("callback_query", async (query) => {
       saveUsers(users);
       const hasSubscription =
         user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
-      const isFreeAvailable = !hasSubscription && user.freeViewed < 12;
+      const isFreeAvailable = user.freeViewed < MAX_FREE_ITEMS;
 
       if (hasSubscription || isFreeAvailable) {
-        bot.sendMessage(chatId, "Хотите увидеть ещё?", {
+        await safeSendMessage(chatId, "Хотите увидеть ещё?", {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "Показать ещё 2 квартиры", callback_data: "show_5" }],
+              ...(hasSubscription || isFreeAvailable
+                ? [[{ text: "Показать ещё 2 квартиры", callback_data: "show_5" }]]
+                : []),
               [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
             ],
           },
         });
       } else {
-        bot.sendMessage(
+        await safeSendMessage(
           chatId,
           `🎁 Вы использовали все бесплатные просмотры.
-
-Чтобы продолжить — оформите подписку:`,
+      
+      Чтобы продолжить — оформите подписку:`,
           {
             reply_markup: {
               inline_keyboard: [
@@ -323,15 +350,36 @@ bot.on("callback_query", async (query) => {
     const room = roomOptions.find((r) => r.name === roomName);
     user.room = room;
     saveUsers(users);
-    bot.sendMessage(chatId, "✅ Фильтр сохранён.", {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
-          [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
-        ],
-      },
-    });
+  
+    const now = Date.now();
+    const hasSubscription = user.hasSubscriptionUntil && user.hasSubscriptionUntil > now;
+    const isFreeAvailable = user.freeViewed < MAX_FREE_ITEMS;
+  
+    if (hasSubscription || isFreeAvailable) {
+      await safeSendMessage(chatId, "✅ Фильтр сохранён.", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
+            [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
+          ],
+        },
+      });
+    } else {
+      await safeSendMessage(
+        chatId,
+        `✅ Фильтр сохранён.\n\n🎁 Вы использовали все бесплатные просмотры.\nЧтобы продолжить — оформите подписку:`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "💳 Оформить подписку", callback_data: "buy_subscription" }],
+              [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
+            ],
+          },
+        }
+      );
+    }
   }
+  
 });
 
 function sendCitySelection(chatId) {
@@ -481,7 +529,7 @@ setInterval(() => {
       delete user.hasSubscriptionUntil;
       saveUsers(users);
       try {
-        await bot.sendMessage(
+        await safeSendMessage(
           chatId,
           "⏳ Ваша подписка закончилась. Чтобы снова получать объявления с номерами — оформите подписку."
         );
@@ -497,7 +545,7 @@ setInterval(() => {
       delete user.limitReachedAt;
       saveUsers(users);
       try {
-        await bot.sendMessage(
+        await safeSendMessage(
           chatId,
           "✅ Прошел час — вы снова можете смотреть квартиры. Нажмите кнопку ниже 👇",
           {
