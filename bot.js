@@ -224,6 +224,11 @@ bot.on("callback_query", async (query) => {
         const hasSubscription =
           user.hasSubscriptionUntil && Date.now() < user.hasSubscriptionUntil;
         const isFreeAvailable = user.freeViewed < MAX_FREE_ITEMS;
+
+        // ❗ Если нет подписки и бесплатный лимит исчерпан — пропускаем
+        if (!hasSubscription && !isFreeAvailable) {
+          continue;
+        }
         const caption = `
 🏠 <b>${item.title || "Объявление"}</b>
 
