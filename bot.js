@@ -11,7 +11,7 @@ const USERS_FILE = path.join(__dirname, "users.json");
 
 const ADMIN_ID = 8185930364;
 const MAX_ITEMS_PER_HOUR = 12;
-const MAX_FREE_ITEMS = 6;
+const MAX_FREE_ITEMS = 4;
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
 const limiter = new Bottleneck({ maxConcurrent: 1, minTime: 40 });
