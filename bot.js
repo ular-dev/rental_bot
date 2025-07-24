@@ -72,7 +72,7 @@ const districts = {
     { name: "ВОЕНГОРОДОК", id: 6004 },
   ],
   'Иссык-Куль': [
-    { name: "Все районы", id: null },
+    { name: "Все пансионаты", id: null },
     { name: "Радуга", id: 30589 },
     { name: "Золотые пески", id: 30598 },
     { name: "Chaika Resort", id: 38837 },
@@ -417,7 +417,7 @@ ${isIssykKul ? `\n📝 <b>Описание:</b> ${item.description || "—"}` : 
         await safeSendMessage(chatId, "✅ Фильтр сохранён.", {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "Показать 2 пансионата", callback_data: "show_5" }],
+              [{ text: "Показать 2 квартиры", callback_data: "show_5" }],
               [{ text: "🔄 Изменить фильтр", callback_data: "change_filter" }],
             ],
           },
