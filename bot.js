@@ -272,7 +272,6 @@ bot.on("callback_query", async (query) => {
         if (!hasSubscription && !isFreeAvailable) {
           continue;
         }
-        console.log(item, 'item');
         const isIssykKul = user.city?.name === "Иссык-Куль";
 
 const caption = `
