@@ -407,7 +407,7 @@ ${isIssykKul ? `\n📝 <b>Описание:</b> ${item.description || "—"}` : 
     user.district = district;
     saveUsers(users);
   
-    if (user.city.name === "Иссык-Куль") {
+    if (user.city?.name === "Иссык-Куль") {
       // Сразу показываем кнопку показа, минуя выбор комнат
       const now = Date.now();
       const hasSubscription = user.hasSubscriptionUntil && user.hasSubscriptionUntil > now;
